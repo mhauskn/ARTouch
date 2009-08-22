@@ -1,9 +1,14 @@
-import java.awt.image.BufferedImage;
+package arTouch.rangeFinders;
+
+import arTouch.CameraCalibrator;
+import arTouch.Clusterer;
+import arTouch.RangeFinder;
+import arTouch.Clusterer.CalibratedPixelAccess;
+import arTouch.Clusterer.Cluster;
+import arTouch.Clusterer.RasterPixelAccess;
+
 import java.awt.image.Raster;
-import java.awt.image.WritableRaster;
 import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.Hashtable;
 
 /**
  * The cluster matcher attempts to find range in the following way:
@@ -22,6 +27,8 @@ public class ClusterMatcher implements RangeFinder {
 	Raster raster0, raster1;
 	ArrayList<Cluster> clusters;
 	int diffCallCount = 0;
+	RasterPixelAccess rasterPixelAccess = new Clusterer.RasterPixelAccess();
+	CalibratedPixelAccess calibratedPixelAccess = new Clusterer.CalibratedPixelAccess();
 
 	/**
 	 * The number of contiguous pixels required to form an acceptable cluster
@@ -45,8 +52,12 @@ public class ClusterMatcher implements RangeFinder {
 		width = raster0.getWidth();
 		height = raster0.getHeight();
 
-		clusters = findClusters();
-		displayClusters();
+		rasterPixelAccess.raster = raster0;
+		calibratedPixelAccess.cameraCalibrator = this.cameraCalibrator;
+		
+		clusters = Clusterer.findClusters(rasterPixelAccess, calibratedPixelAccess,
+				width, height, MIN_DIFF_THRESHOLD, MIN_CLUSTER_THRESHOLD);
+		Clusterer.displayClusters(clusters, width, height, raster0, true);
 		diffCallCount = 0;
 		long timeStart = System.currentTimeMillis();
 		for (Cluster cluster : clusters)
@@ -54,10 +65,6 @@ public class ClusterMatcher implements RangeFinder {
 
 		System.out.println("-------------- Shift Diff Called " + diffCallCount
 				+ " times Time: " + (System.currentTimeMillis() - timeStart));
-	}
-	
-	private void shiftRectangles () {
-		
 	}
 
 	/**
@@ -72,7 +79,7 @@ public class ClusterMatcher implements RangeFinder {
 		int rightEdge = width;
 
 		while (shiftWidth > 0) {
-			int start = diffCallCount;
+			//int start = diffCallCount;
 			bestShift = skipShift(bestShift, leftEdge, rightEdge, shiftWidth, 
 					cluster);
 			//System.out.printf("Checking Shift - Mid: %d L: %d R: %d Width: %d" +
@@ -156,66 +163,6 @@ public class ClusterMatcher implements RangeFinder {
 	}
 
 	/**
-	 * The cluster class is a simple way to store lists of x,y points.
-	 */
-	public class Cluster {
-		public ArrayList<Integer> x = new ArrayList<Integer>();
-		public ArrayList<Integer> y = new ArrayList<Integer>();
-		public int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE;
-
-		public void add (int x, int y) {
-			this.x.add(x);
-			this.y.add(y);
-
-			if (x < minX)
-				minX = x;
-			if (x > maxX)
-				maxX = x;
-		}
-
-		public int size () {
-			return x.size();
-		}
-
-		public String toString() {
-			return "" + size();
-		}
-
-		/**
-		 * Provides a rough estimate of the width of this cluster
-		 */
-		public int getWidth () {
-			return maxX - minX;
-		}
-	}
-
-	/**
-	 * Paints each cluster red and displays the resulting image
-	 */
-	private void displayClusters () {
-		BufferedImage imageOut = new BufferedImage(width, height, 
-				BufferedImage.TYPE_INT_ARGB);
-
-		WritableRaster rasterOut = imageOut.getRaster();
-
-		rasterOut.setDataElements(0, 0, raster0);
-
-		for (Cluster cluster : clusters) {
-			ArrayList<Integer> xLocs = cluster.x;
-			ArrayList<Integer> yLocs = cluster.y;
-
-			for (int i = 0; i < xLocs.size(); i++) {
-				int[] rgba = rasterOut.getPixel(xLocs.get(i), yLocs.get(i),
-						new int[4]);
-				rgba[0] = 255;
-				rasterOut.setPixel(xLocs.get(i), yLocs.get(i), new int[] { 255,0,0,255});
-			}
-		}
-
-		DualViewer.displayImage(imageOut);
-	}
-
-	/**
 	 * Attempts to shift a cluster by varying amounts in the horizontal
 	 * direction. Ideally at some x-shift we should reach a minimum of 
 	 * pixel difference.
@@ -235,102 +182,25 @@ public class ClusterMatcher implements RangeFinder {
 		System.out.printf("Patch Size %d. Best Offset %d. Best Diff %f.\n",
 				cluster.size(), bestOffset, bestDiff);
 	}
-
-	/**
-	 * Performs a single scan through the image looking for contiguous 
-	 * "hot" pixels. These contiguous hot pixels are segmented into 
-	 * clusters. Only clusters over a certain threshold are returned.
-	 */
-	private ArrayList<Cluster> findClusters () {
-		Hashtable<Cluster, Boolean> clusters = 
-			new Hashtable<Cluster,Boolean>();
-
-		Hashtable<Integer,Cluster> clusterCoords = 
-			new Hashtable<Integer,Cluster>();
-
-		Cluster currentCluster = null;
-
-		for (int y = 0; y < height; y++) {
-			for (int x = 0; x < width; x++) {
-				int[] rgb0 = raster0.getPixel(x, y, new int[4]);
-				int[] rgb1 = cameraCalibrator.getMatchingPixel(x, y);
-
-				if (rgb1 == null)
-					continue;
-
-				int pixDiff = Math.abs(rgb0[0] - rgb1[0]) +
-				Math.abs(rgb0[1] - rgb1[1]) +
-				Math.abs(rgb0[2] - rgb1[2]);
-
-				if (pixDiff < MIN_DIFF_THRESHOLD) {
-					currentCluster = null;
-					clusterCoords.remove(x);
-					continue;
-				}
-
-				if (currentCluster != null && clusterCoords.containsKey(x) &&
-						!clusterCoords.get(x).equals(currentCluster)) {
-					// merge clusters
-					Cluster other = clusterCoords.get(x);
-					Cluster larger, smaller;
-
-					if (currentCluster.size() > other.size()) {
-						larger = currentCluster;
-						smaller = other;
-					} else {
-						larger = other;
-						smaller = currentCluster;
-					}
-
-					ArrayList<Integer> smallerX = smaller.x;
-					ArrayList<Integer> smallerY = smaller.y;
-
-					for (int i = 0; i < smallerX.size(); i++) {
-						larger.add(smallerX.get(i), smallerY.get(i));
-						if (smallerY.get(i) >= y - 1) {
-							//TODO: Why does this assertion fail?
-							//assert clusterCoords.containsKey(smallerX.get(i));
-							clusterCoords.put(smallerX.get(i), larger);
-						}
-					}
-					clusters.remove(smaller);
-					currentCluster = larger;
-				} else if (clusterCoords.containsKey(x))
-					currentCluster = clusterCoords.remove(x);
-
-				if (currentCluster == null) { // Create a new cluster
-					Cluster newCluster = new Cluster();
-					newCluster.add(x,y);
-
-					clusters.put(newCluster, true);
-					clusterCoords.put(x, newCluster);
-					currentCluster = newCluster;
-				} else { // Expand Current Cluster
-					currentCluster.add(x,y);
-					clusterCoords.put(x, currentCluster);
-					if (x > 0)
-						clusterCoords.put(x-1, currentCluster);
-				}
-			}
-		}
-		return findLargeClusters(clusters);
-	}
-
-	/**
-	 * Returns a list containing only the clusters over a certain
-	 * threshold.
-	 */
-	private ArrayList<Cluster> findLargeClusters 
-	(Hashtable<Cluster,Boolean> clusterHT) {
-		ArrayList<Cluster> out = new ArrayList<Cluster>();
-		Enumeration<Cluster> clusters = clusterHT.keys();
-
-		while (clusters.hasMoreElements()) {
-			Cluster c = clusters.nextElement();
-			if (c.size() > MIN_CLUSTER_THRESHOLD)
-				out.add(c);
-		}
-
-		return out;
+	
+	public static void matchClusters (ArrayList<Cluster> fg0Clusters,
+			ArrayList<Cluster> fg1Clusters) {
+		
+		if (fg0Clusters.isEmpty() || fg1Clusters.isEmpty())
+			return;
+		
+		double fg0Avg = 0.0, fg1Avg = 0.0;
+		
+		for (Cluster c : fg0Clusters)
+			fg0Avg += c.getAvgX();
+		
+		for (Cluster c : fg1Clusters)
+			fg1Avg += c.getAvgX();
+		
+		fg0Avg /= fg0Clusters.size();
+		fg1Avg /= fg1Clusters.size();
+		
+		System.out.println(fg0Avg - fg1Avg);
+		//System.out.println("Cluster0Avg: " + fg0Avg + " Cluster1Avg: " + fg1Avg);
 	}
 }

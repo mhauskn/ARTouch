@@ -1,3 +1,5 @@
+package arTouch;
+
 import java.awt.image.BufferedImage;
 import java.awt.image.Raster;
 import java.awt.image.WritableRaster;
@@ -10,7 +12,7 @@ import java.awt.image.WritableRaster;
  */
 public class CameraCalibrator {
 	private boolean initialCalibrationDone = false;
-	int offsetX = -17, offsetY = 9;
+	int offsetX = -10, offsetY = 15;
 	int height, width;
 	int globalOffsetR = 0, globalOffsetG = 0, globalOffsetB = 0;
 	int[][] individualOffsetR, individualOffsetG, individualOffsetB;
@@ -126,7 +128,7 @@ public class CameraCalibrator {
 			double currDiff = totalDiff / (double) pixelsDiffed;			
 
 			if (currDiff < bestDiff) {
-				DualViewer.displayImage(imageOut);
+				DualViewer.displayImageLeft(imageOut);
 
 				offsetX = currXOffset;
 				offsetY = currYOffset;

@@ -1,3 +1,5 @@
+package arTouch;
+
 import java.awt.Image;
 import java.awt.Point;
 import java.awt.image.BufferedImage;
@@ -8,6 +10,10 @@ import java.awt.image.PixelGrabber;
 import java.awt.image.Raster;
 import java.awt.image.SinglePixelPackedSampleModel;
 import java.awt.image.WritableRaster;
+import java.util.ArrayList;
+
+import arTouch.Clusterer.Cluster;
+import arTouch.rangeFinders.ClusterMatcher;
 
 public class StereoVisionProcessor {
 	BufferedImage image0, image1;
@@ -15,6 +21,7 @@ public class StereoVisionProcessor {
 	
 	CameraCalibrator cameraCalibrator = new CameraCalibrator();
 	RangeFinder rangeFinder = new ClusterMatcher(cameraCalibrator);
+	BGSubtractor bgSubtractor = new BGSubtractor();
 	
 	public void processImagePair (Image img0, Image img1) {
 		image0 = getBufferedImage(img0);
@@ -24,7 +31,15 @@ public class StereoVisionProcessor {
 		raster1 = image1.getData();
 
 		cameraCalibrator.checkCameraCalibration(raster0, raster1);
-		rangeFinder.findRange(raster0, raster1);
+		ArrayList<Cluster> bg0Clusters = bgSubtractor.getForeground0(raster0);
+		ArrayList<Cluster> bg1Clusters = bgSubtractor.getForeground1(raster1);
+		
+		int width = raster0.getWidth(), height = raster0.getHeight();
+		Clusterer.displayClusters(bg0Clusters, width, height, raster0, true);
+		Clusterer.displayClusters(bg1Clusters, width, height, raster1, false);
+		
+		ClusterMatcher.matchClusters(bg0Clusters, bg1Clusters);
+		//rangeFinder.findRange(raster0, raster1);
 	}
 
 	/**

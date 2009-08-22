@@ -1,3 +1,5 @@
+package arTouch;
+
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Image;
@@ -17,7 +19,7 @@ import au.edu.jcu.v4l4j.exceptions.V4L4JException;
 
 public class DualViewer extends WindowAdapter implements Runnable {
 	private VideoDevice vd0, vd1;
-	private static JLabel l0, l1, l2;
+	private static JLabel l0, l1, l2, l3;
 	private JFrame f;
 	private FrameGrabber fg0, fg1;
 	private Thread captureThread;
@@ -53,6 +55,7 @@ public class DualViewer extends WindowAdapter implements Runnable {
 	private void initGUI(){
 		f = new JFrame("Dual Viewer");
 		JPanel panel = new JPanel(new BorderLayout());
+		JPanel southPanel = new JPanel(new BorderLayout());
 		l0 = new JLabel();
 		l0.setPreferredSize(new Dimension(fg0.getWidth(), fg0.getHeight()));
 		l1 = new JLabel();
@@ -60,10 +63,15 @@ public class DualViewer extends WindowAdapter implements Runnable {
 		
 		l2 = new JLabel();
 		l2.setPreferredSize(new Dimension(fg1.getWidth(), fg1.getHeight()));
+		l3 = new JLabel();
+		l3.setPreferredSize(new Dimension(fg1.getWidth(), fg1.getHeight()));
 
-		panel.add(l0, BorderLayout.EAST);
-		panel.add(l1, BorderLayout.WEST);
-		panel.add(l2, BorderLayout.SOUTH);
+		southPanel.add(l2, BorderLayout.WEST);
+		southPanel.add(l3, BorderLayout.EAST);
+		
+		panel.add(l0, BorderLayout.WEST);
+		panel.add(l1, BorderLayout.EAST);
+		panel.add(southPanel, BorderLayout.SOUTH);
 
 		f.add(panel);
 		f.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
@@ -137,9 +145,14 @@ public class DualViewer extends WindowAdapter implements Runnable {
 		f.dispose();            
 	}
 	
-	public static void displayImage (Image img) {
+	public static void displayImageLeft (Image img) {
 		l2.setIcon(new ImageIcon(img));
 		l2.repaint();
+	}
+	
+	public static void displayImageRight (Image img) {
+		l3.setIcon(new ImageIcon(img));
+		l3.repaint();
 	}
 
 	public static void main(String[] args) throws V4L4JException, IOException {
